@@ -25,10 +25,12 @@
 package com.cluedetails;
 
 import static com.cluedetails.ClueDetailsConfig.CLUE_ITEMS_CONFIG;
+import static com.cluedetails.ClueDetailsConfig.CLUE_NAMED_WIDGETS_CONFIG;
 import static com.cluedetails.ClueDetailsConfig.CLUE_WIDGETS_CONFIG;
 
 import com.google.gson.reflect.TypeToken;
-import java.util.List;
+
+import java.util.*;
 import java.util.stream.*;
 
 import javax.inject.Inject;
@@ -101,11 +103,31 @@ public class CluePreferenceManager
 		return false;
 	}
 
+	public boolean widgetsPreferenceContainsNamedWidget(int clueID, int parentId, String name)
+	{
+		Map<Integer, List<String>> namedClueWidgets = getNamedWidgetsPreference(clueID);
+		if (namedClueWidgets != null)
+		{
+			List<String> names = namedClueWidgets.get(parentId);
+			if (names != null)
+			{
+				return names.contains(name);
+			}
+		}
+		return false;
+	}
+
 	public List<WidgetId> getWidgetsPreference(int clueID)
 	{
 		String clueWidgets = configManager.getConfiguration(CLUE_WIDGETS_CONFIG, String.valueOf(clueID));
 
 		return clueDetailsPlugin.gson.fromJson(clueWidgets, new TypeToken<List<WidgetId>>(){}.getType());
+	}
+
+	public Map<Integer, List<String>> getNamedWidgetsPreference(int clueID)
+	{
+		String namedClueWidgets = configManager.getConfiguration(CLUE_NAMED_WIDGETS_CONFIG, String.valueOf(clueID));
+		return clueDetailsPlugin.gson.fromJson(namedClueWidgets, new TypeToken<Map<Integer, List<String>>>(){}.getType());
 	}
 
 	public void saveWidgetsPreference(int clueID, List<WidgetId> newWidgets)
@@ -122,6 +144,19 @@ public class CluePreferenceManager
 				.collect(Collectors.toList());
 			String clueWidgetIdsJson = clueDetailsPlugin.gson.toJson(mappedWidgetIds);
 			configManager.setConfiguration(CLUE_WIDGETS_CONFIG, String.valueOf(clueID), clueWidgetIdsJson);
+		}
+	}
+
+	public void saveNamedWidgetsPreference(int clueID, Map<Integer, List<String>> newWidgets)
+	{
+		if (newWidgets.isEmpty())
+		{
+			configManager.unsetConfiguration(CLUE_NAMED_WIDGETS_CONFIG, String.valueOf(clueID));
+		}
+		else
+		{
+			String clueWidgetIdsJson = clueDetailsPlugin.gson.toJson(newWidgets);
+			configManager.setConfiguration(CLUE_NAMED_WIDGETS_CONFIG, String.valueOf(clueID), clueWidgetIdsJson);
 		}
 	}
 }

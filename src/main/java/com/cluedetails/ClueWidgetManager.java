@@ -30,7 +30,9 @@ import net.runelite.api.KeyCode;
 import net.runelite.api.Menu;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.config.ConfigManager;
 
 import javax.inject.Singleton;
@@ -83,6 +85,8 @@ public class ClueWidgetManager
 
             int componentId = widget.getId();
             int childIndex = widget.getIndex();
+            int parentId = widget.getParentId();
+            String name = widget.getName();
             WidgetId widgetId = new WidgetId(componentId, childIndex == -1 ? null : childIndex);
 
             MenuEntry clueDetailsEntry = client.getMenu().createMenuEntry(1) // place above Cancel
@@ -98,20 +102,35 @@ public class ClueWidgetManager
                         {
                             instance
                                 .getClueIds()
-                                .forEach((clueId) -> addHighlightWidgetMenu(cluePreferenceManager, submenu, Clues.forClueIdFiltered(clueId), widgetId));
+                                .forEach((clueId) -> addHighlightWidgetMenu(cluePreferenceManager, submenu, Clues.forClueIdFiltered(clueId), widgetId, parentId, name));
                         }
                     });
             break;
         }
     }
 
-    private void addHighlightWidgetMenu(CluePreferenceManager cluePreferenceManager, Menu menu, Clues clue, WidgetId widgetId)
+    private void addHighlightWidgetMenu(CluePreferenceManager cluePreferenceManager, Menu menu, Clues clue, WidgetId widgetId, int parentId, String name)
     {
         if (clue == null) return;
 
-        boolean widgetInCluePreference = cluePreferenceManager.widgetsPreferenceContainsWidget(clue.getClueID(), widgetId);
+        int spellList = WidgetUtil.packComponentId(InterfaceID.MAGIC_SPELLBOOK, InterfaceID.MagicSpellbook.SPELLLAYER);
 
-        String action = widgetInCluePreference ? "Remove from " : "Add to ";
+        // Spells have been the most changing widgets.
+        // For now, we want to limit named widget highlights to just the spellbook
+        boolean isNamedWidgetsSupported = parentId == spellList;
+
+        // Support situations where parent has both named and unnamed widgets.
+        // Named widgets used for those with names, generic system for others
+        boolean isNamedWidget = isNamedWidgetsSupported && name != null;
+        boolean namedWidgetExists = isNamedWidget && cluePreferenceManager.widgetsPreferenceContainsNamedWidget(clue.getClueID(), parentId, name);
+
+        // always remove old widget when we are dealing with named widgets
+        boolean widgetExists = cluePreferenceManager.widgetsPreferenceContainsWidget(clue.getClueID(), widgetId);
+        boolean removeWidget = isNamedWidget || widgetExists;
+
+        boolean isRemoveOperation = isNamedWidget ? namedWidgetExists : removeWidget;
+
+        String action = isRemoveOperation ? "Remove from " : "Add to ";
         String clueDetail = clue.getDetail(configManager);
         final String text = action + "'" + clueDetail + "'";
 
@@ -119,10 +138,16 @@ public class ClueWidgetManager
         menu.createMenuEntry(-1)
                 .setOption(text)
                 .setType(MenuAction.RUNELITE)
-                .onClick(e -> updateClueWidgets(clue, widgetId, cluePreferenceManager));
+                .onClick(e -> {
+                    if (isNamedWidget)
+                    {
+                        updateClueNamedWidgets(clue, parentId, name, cluePreferenceManager);
+                    }
+                    updateClueWidgets(clue, widgetId, cluePreferenceManager, removeWidget);
+                });
     }
 
-    private void updateClueWidgets(Clues clue, WidgetId widgetId, CluePreferenceManager cluePreferenceManager)
+    private void updateClueWidgets(Clues clue, WidgetId widgetId, CluePreferenceManager cluePreferenceManager, boolean isRemove)
     {
         // Get existing Clue widgetIds
         int clueId = clue.getClueID();
@@ -130,11 +155,15 @@ public class ClueWidgetManager
 
         if (clueWidgetIds == null)
         {
+            if (isRemove)
+            {
+                return;
+            }
             clueWidgetIds = new ArrayList<>();
         }
 
         // Remove if already present
-        if (clueWidgetIds.contains(widgetId))
+        if (isRemove)
         {
             clueWidgetIds.remove(widgetId);
         }
@@ -146,6 +175,51 @@ public class ClueWidgetManager
 
         // Save Clue widgetIds
         cluePreferenceManager.saveWidgetsPreference(clueId, clueWidgetIds);
+    }
+
+    private void updateClueNamedWidgets(Clues clue, int parentId, String name, CluePreferenceManager cluePreferenceManager)
+    {
+        int clueId = clue.getClueID();
+        Map<Integer, List<String>> clueNamedWidgetIds = cluePreferenceManager.getNamedWidgetsPreference(clueId);
+
+        if (clueNamedWidgetIds == null)
+        {
+            clueNamedWidgetIds = new HashMap<>();
+        }
+
+        List<String> existingWidgets = clueNamedWidgetIds.get(parentId);
+
+        if (existingWidgets != null)
+        {
+            if (existingWidgets.contains(name))
+            {
+                existingWidgets.remove(name);
+            }
+            else
+            {
+                existingWidgets.add(name);
+            }
+
+            if (existingWidgets.isEmpty())
+            {
+                // Remove named widgets from the parent if the last one was removed
+                clueNamedWidgetIds.remove(parentId);
+            }
+            else
+            {
+                // Update with new named widgets
+                clueNamedWidgetIds.put(parentId, existingWidgets);
+            }
+        }
+        else
+        {
+            // Add first named widget if not present
+            existingWidgets = List.of(name);
+            NamedWidgetId namedWidgetId = new NamedWidgetId(parentId, existingWidgets);
+            clueNamedWidgetIds.put(namedWidgetId.getParentId(), namedWidgetId.getNames());
+        }
+
+        cluePreferenceManager.saveNamedWidgetsPreference(clueId, clueNamedWidgetIds);
     }
 
 }

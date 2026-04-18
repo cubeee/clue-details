@@ -42,6 +42,7 @@ public interface ClueDetailsConfig extends Config
 	String GROUP = "clue-details";
 	String CLUE_ITEMS_CONFIG = "clue-details-items";
 	String CLUE_WIDGETS_CONFIG = "clue-details-widgets";
+	String CLUE_NAMED_WIDGETS_CONFIG = "clue-details-named-widgets";
 
 	enum ClueOrdering implements Comparator<Clues>
 	{

@@ -50,7 +50,8 @@ public class ClueDetailsWidgetsOverlay extends OverlayPanel
 	private final ClueInventoryManager clueInventoryManager;
 	private final CluePreferenceManager cluePreferenceManager;
 
-	private final Cache<WidgetId, Color> clueColorCache;
+	private final Cache<WidgetId, Color> clueWidgetColorCache;
+	private final Cache<NamedWidgetId, Color> clueNamedWidgetColorCache;
 
 	private long lastUpdate = Integer.MAX_VALUE;
 
@@ -69,7 +70,11 @@ public class ClueDetailsWidgetsOverlay extends OverlayPanel
 		this.clueInventoryManager = clueInventoryManager;
 		this.cluePreferenceManager = cluePreferenceManager;
 
-		this.clueColorCache = CacheBuilder.newBuilder()
+		this.clueWidgetColorCache = CacheBuilder.newBuilder()
+			.concurrencyLevel(1)
+			.maximumSize(100)
+			.build();
+		this.clueNamedWidgetColorCache = CacheBuilder.newBuilder()
 			.concurrencyLevel(1)
 			.maximumSize(100)
 			.build();
@@ -79,6 +84,7 @@ public class ClueDetailsWidgetsOverlay extends OverlayPanel
 	{
 		Color defaultHighlightColor = config.widgetHighlightColor();
 		Map<WidgetId, Color> clueWidgetColors = new HashMap<>();
+		Map<NamedWidgetId, Color> clueNamedWidgetColors = new HashMap<>();
 		if (config.highlightInventoryClueWidgets())
 		{
 			for (Integer itemID : clueInventoryManager.getCluesInInventory())
@@ -108,11 +114,22 @@ public class ClueDetailsWidgetsOverlay extends OverlayPanel
 							clueWidgetColors.put(widgetId, widgetColor);
 						}
 					}
+					Map<Integer, List<String>> namedWidgetsPreference = cluePreferenceManager.getNamedWidgetsPreference(clueId);
+					if (namedWidgetsPreference != null)
+					{
+						namedWidgetsPreference.forEach((parentId, names) ->
+						{
+							NamedWidgetId namedWidgetId = new NamedWidgetId(parentId, names);
+							clueNamedWidgetColors.put(namedWidgetId, widgetColor);
+                        });
+					}
 				}
 			}
 		}
-		clueColorCache.invalidateAll();
-		clueColorCache.putAll(clueWidgetColors);
+		clueWidgetColorCache.invalidateAll();
+		clueWidgetColorCache.putAll(clueWidgetColors);
+		clueNamedWidgetColorCache.invalidateAll();
+		clueNamedWidgetColorCache.putAll(clueNamedWidgetColors);
 	}
 
 	@Override
@@ -125,9 +142,53 @@ public class ClueDetailsWidgetsOverlay extends OverlayPanel
 			cacheInventoryCluesWidgetColors();
 		}
 
-		if (config.highlightInventoryClueWidgets() && clueColorCache.size() > 0)
+		boolean hasWidgetRecolors = clueWidgetColorCache.size() > 0 || clueNamedWidgetColorCache.size() > 0;
+
+		if (config.highlightInventoryClueWidgets() && hasWidgetRecolors)
 		{
-			for (Map.Entry<WidgetId, Color> entry : clueColorCache.asMap().entrySet())
+			for (Map.Entry<NamedWidgetId, Color> entry : clueNamedWidgetColorCache.asMap().entrySet())
+			{
+				NamedWidgetId namedWidgetId = entry.getKey();
+				Color widgetColor = entry.getValue();
+
+				Widget parentWidget = client.getWidget(namedWidgetId.getParentId());
+				if (parentWidget == null || parentWidget.isHidden())
+				{
+					continue;
+				}
+
+				Widget[] children = parentWidget.getStaticChildren();
+				if (children == null)
+				{
+					continue;
+				}
+
+				// TODO: cache spellbook widget ids on demand and use it here.
+				//  constantly looking by name is giga slow
+				for (Widget childWidget : children)
+				{
+					if (childWidget == null)
+					{
+						continue;
+					}
+
+					if (!namedWidgetId.getNames().contains(childWidget.getName()))
+					{
+						continue;
+					}
+
+					if (childWidget.isHidden())
+					{
+						continue;
+					}
+
+					graphics.setColor(widgetColor);
+					graphics.setClip(childWidget.getBounds());
+					graphics.fill(childWidget.getBounds());
+				}
+			}
+
+			for (Map.Entry<WidgetId, Color> entry : clueWidgetColorCache.asMap().entrySet())
 			{
 				WidgetId widgetId = entry.getKey();
 				int componentId = widgetId.getComponentId();

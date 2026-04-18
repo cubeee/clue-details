@@ -557,7 +557,7 @@ public class ClueDetailsPlugin extends Plugin
 			itemsOverlay.invalidateCache();
 		}
 
-		if (event.getGroup().equals(config.CLUE_WIDGETS_CONFIG)
+		if (event.getGroup().equals(ClueDetailsConfig.CLUE_WIDGETS_CONFIG)
 			|| event.getKey().equals("highlightInventoryClueWidgets")
 			|| event.getKey().equals("widgetHighlightColor")
 			|| event.getKey().equals("colorInventoryClueWidgets")

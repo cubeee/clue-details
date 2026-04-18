@@ -91,6 +91,7 @@ public class ClueDetailsSharingManager
 			if (resetColors) configManager.unsetConfiguration("clue-details-color", String.valueOf(id));
 			if (resetItems) configManager.unsetConfiguration(CLUE_ITEMS_CONFIG, String.valueOf(id));
 			if (resetWidgets) configManager.unsetConfiguration(CLUE_WIDGETS_CONFIG, String.valueOf(id));
+			// TODO: reset named widgets
 		}
 	}
 
@@ -119,6 +120,8 @@ public class ClueDetailsSharingManager
 			List<WidgetId> loadedClueWidgetsData = clueWidgets != null
 					? gson.fromJson(clueWidgets, new TypeToken<List<WidgetId>>(){}.getType())
 					: null;
+
+			// TODO: load named widgets
 
 			Color exportedColor = clueColor != null ? Color.decode(clueColor) : null;
 
@@ -312,6 +315,7 @@ public class ClueDetailsSharingManager
 					configManager.setConfiguration(CLUE_WIDGETS_CONFIG, String.valueOf(importPoint.id), gson.toJson(importPoint.widgetIds));
 				}
 			}
+			// TODO: named widgets
 		}
 
 		sendChatMessage(importPoints.size() + " clue details were imported from the clipboard.");
